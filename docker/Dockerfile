@@ -61,11 +61,18 @@ RUN apt install python3-colcon-common-extensions python3-colcon-mixin python3-vc
 RUN colcon mixin add default https://raw.githubusercontent.com/colcon/colcon-mixin-repository/master/index.yaml
 RUN colcon mixin update default
 
+RUN curl -O https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+RUN bash ~/Miniconda3-latest-Linux-x86_64.sh -b -p ~/miniconda3
+RUN rm ~/Miniconda3-latest-Linux-x86_64.sh
+
+RUN /root/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+RUN /root/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+RUN /root/miniconda3/bin/conda create -y -n lerobot-ros python=3.12
+RUN echo "source /root/miniconda3/etc/profile.d/conda.sh" >> ~/.bashrc
+
 COPY build.sh .
 COPY install.sh .
-COPY create_env.sh .
 
 RUN echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
 RUN echo "source ~/fanuc_ws/install/setup.bash" >> ~/.bashrc
 RUN echo "source ~/moveit_ws/install/setup.bash" >> ~/.bashrc
-RUN echo "export ROS_DOMAIN_ID=72" >> ~/.bashrc
