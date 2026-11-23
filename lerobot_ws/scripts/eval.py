@@ -1,6 +1,8 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import cv2
 import torch
+from torchvision import transforms
 import threading
 import time
 import argparse
@@ -102,7 +104,7 @@ class CameraSubscriber(Node):
         data = np.frombuffer(msg.data, dtype=np.uint8)
         data = data.reshape([height, width, 3])
         data = torch.from_numpy(data).clone()
-        self.images[msg.header.frame_id] = data.type(torch.float32).permute(2, 0, 1)
+        self.images[msg.header.frame_id] = data.type(torch.float32).permute(2, 0, 1) / 255.0
 
     
 def get_obs(joint_sub, image_sub, device):
@@ -156,6 +158,18 @@ def main(args):
                 if len(observations) == 0:
                     continue
                 else:
+                    if args.show_images:
+                        plot_images = []
+                        for k, v in observations.items():
+                            if "image" in k:
+                                img = v
+                                img = img.squeeze(0)
+                                plot_images.append(img)
+                        plot_img = torch.cat(plot_images, dim=2)
+                        plot_img = transforms.ToPILImage(mode="RGB")(plot_img)
+                        plt.imshow(plot_img)
+                        plt.pause(0.01)
+                            
                     actions = policy.select_action(observations)
                     for i in range(len(actions)):
                         action = actions[i]
@@ -186,6 +200,7 @@ if __name__ == "__main__":
     parser.add_argument("--camera_names", type=str, nargs="*", default=["top_image", "hand_image"], help="Name of cameras.")
     parser.add_argument("--device", type=str, default="cuda", help="device")
     parser.add_argument("--use_isaac", type=bool, default=False, help="On isaac sim")
+    parser.add_argument("--show_images", type=bool, default=False, help="show images")
     args = parser.parse_args()
     
     main(args)
