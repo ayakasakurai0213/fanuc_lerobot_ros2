@@ -278,7 +278,7 @@ class CRXTwistKeyboardTeleop(KeyboardTeleop):
     def connect(self, calibrate: bool = True) -> None:
         
         if self.process is not None and self.process.poll() is None:
-            # print("Keyboard teleop is already running.")
+            print("Keyboard teleop is already running.")
             return
 
         command = [
@@ -304,7 +304,7 @@ class CRXTwistKeyboardTeleop(KeyboardTeleop):
         self.spin_thread = threading.Thread(target=self.executor.spin, daemon=True)
         self.spin_thread.start()
             
-        # print("Keyboard teleop started.")
+        print("Keyboard teleop started.")
         
     def get_action(self) -> RobotAction:
         action = {
@@ -316,15 +316,19 @@ class CRXTwistKeyboardTeleop(KeyboardTeleop):
             "angular_z.vel": 0.0,
             "gripper.pos": 0.0,
             }
-        data = self.cmd_vel_sub.twist_data
+        twist_data = self.cmd_vel_sub.twist_data
+        gripper_data = self.cmd_vel_sub.grip_data
         
-        if data is not None:
-            action["linear_x.vel"] = data.linear.x
-            action["linear_y.vel"] = data.linear.y
-            action["linear_z.vel"] = data.linear.z
-            action["angular_x.vel"] = data.angular.x
-            action["angular_y.vel"] = data.angular.y
-            action["angular_z.vel"] = data.angular.z
+        if twist_data is not None:
+            action["linear_x.vel"] = twist_data.linear.x
+            action["linear_y.vel"] = twist_data.linear.y
+            action["linear_z.vel"] = twist_data.linear.z
+            action["angular_x.vel"] = twist_data.angular.x
+            action["angular_y.vel"] = twist_data.angular.y
+            action["angular_z.vel"] = twist_data.angular.z
+        
+        if gripper_data is not None:
+            action["gripper.pos"] = gripper_data[0]
 
         return action
 
@@ -348,7 +352,7 @@ class CRXTwistKeyboardTeleop(KeyboardTeleop):
 
         self.executor = None
         
-        # print("Keyboard teleop stopped.")
+        print("Keyboard teleop stopped.")
 
 
 class CRXKeyboardJointTeleop(KeyboardJointTeleop):
