@@ -31,10 +31,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import subprocess
+import threading
+import rclpy
+from rclpy.executors import SingleThreadedExecutor
 import time
 from scipy.spatial.transform import Rotation
-
-from lerobot.lerobot_types import RobotAction
 
 import sys
 from pathlib import Path
@@ -44,7 +46,13 @@ sys.path.append(ISAAC_TELEOP_PATH)
 from isaac_teleop.base import IsaacTeleopTeleoperator, _isaacteleop_available
 from isaac_teleop.config_isaac_teleop import XRControllerConfig
 
+from lerobot.lerobot_types import RobotAction
+from lerobot.teleoperators.keyboard.configuration_keyboard import KeyboardTeleopConfig
+from lerobot.teleoperators.keyboard import KeyboardTeleop
+
 from lerobot_teleoperator_devices.keyboard_joint import KeyboardJointTeleop
+
+from .twist_keyboard import TwistKeyboard
 
 if TYPE_CHECKING or _isaacteleop_available:
     from isaacteleop.retargeting_engine.deviceio_source_nodes import ControllersSource
@@ -235,6 +243,112 @@ class XRROSController(IsaacTeleopTeleoperator):
             action["gripper.pos"] = data["trigger"]
         
         return action
+
+
+class CRXTwistKeyboardTeleop(KeyboardTeleop):
+    config_class = KeyboardTeleopConfig
+    name = "teleop_twist_keyboard"
+
+    def __init__(self, config: KeyboardTeleopConfig):
+        super().__init__(config)
+        self.config = config
+        self.robot_type = config.type
+        
+        self.process = None
+        self.cmd_vel_sub = None
+        self.executor = None
+        self.spin_thread = None
+    
+    @property
+    def action_features(self) -> dict:
+        return {
+            "linear_x.vel": float,
+            "linear_y.vel": float,
+            "linear_z.vel": float,
+            "angular_x.vel": float,
+            "angular_y.vel": float,
+            "angular_z.vel": float,
+            "gripper.pos": float,
+        }
+
+    @property
+    def is_connected(self) -> bool:
+        return self.process is not None and self.process.poll() is None and self.cmd_vel_sub is not None
+
+    def connect(self, calibrate: bool = True) -> None:
+        
+        if self.process is not None and self.process.poll() is None:
+            # print("Keyboard teleop is already running.")
+            return
+
+        command = [
+            "ros2", "run",
+            "teleop_twist_keyboard",
+            "teleop_twist_keyboard",
+            "--ros-args",
+            "-p", "stamped:=true",
+            "-p", "frame_id:=base_link",
+            "-p", "speed:=0.05", 
+            "-p", "turn:=0.1", 
+            "-r", "cmd_vel:=/twist_keyboard/cmd_vel",
+        ]
+        self.process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        if not rclpy.ok():
+            rclpy.init()
+        
+        self.cmd_vel_sub = TwistKeyboard()
+        self.executor = SingleThreadedExecutor()
+        self.executor.add_node(self.cmd_vel_sub)
+        
+        self.spin_thread = threading.Thread(target=self.executor.spin, daemon=True)
+        self.spin_thread.start()
+            
+        # print("Keyboard teleop started.")
+        
+    def get_action(self) -> RobotAction:
+        action = {
+            "linear_x.vel": 0.0,
+            "linear_y.vel": 0.0,
+            "linear_z.vel": 0.0,
+            "angular_x.vel": 0.0,
+            "angular_y.vel": 0.0,
+            "angular_z.vel": 0.0,
+            "gripper.pos": 0.0,
+            }
+        data = self.cmd_vel_sub.twist_data
+        
+        if data is not None:
+            action["linear_x.vel"] = data.linear.x
+            action["linear_y.vel"] = data.linear.y
+            action["linear_z.vel"] = data.linear.z
+            action["angular_x.vel"] = data.angular.x
+            action["angular_y.vel"] = data.angular.y
+            action["angular_z.vel"] = data.angular.z
+
+        return action
+
+    def disconnect(self) -> None:
+        if self.process is not None and self.process.poll() is None:
+            self.process.terminate()
+            self.process.wait()
+
+        self.process = None
+        
+        if self.executor is not None:
+            self.executor.shutdown()
+
+        if hasattr(self, "executor_thread") and self.executor_thread is not None:
+            self.executor_thread.join(timeout=2.0)
+            self.executor_thread = None
+
+        if self.cmd_vel_sub is not None:
+            self.cmd_vel_sub.destroy_node()
+            self.cmd_vel_sub = None
+
+        self.executor = None
+        
+        # print("Keyboard teleop stopped.")
 
 
 class CRXKeyboardJointTeleop(KeyboardJointTeleop):

@@ -10,6 +10,13 @@ sys.path.append(ISAAC_TELEOP_PATH)
 from isaac_teleop.config_isaac_teleop import XRControllerConfig
 
 
+@TeleoperatorConfig.register_subclass("crx_twist_keyboard")
+@dataclass
+class CRXTwistKeyboardTeleopConfig(KeyboardJointTeleopConfig):
+    def __post_init__(self):
+        self.arm_action_keys = ["J1.pos", "J2.pos", "J3.pos", "J4.pos", "J5.pos", "J6.pos"]
+
+
 @TeleoperatorConfig.register_subclass("crx_keyboard_joint")
 @dataclass
 class CRXKeyboardJointTeleopConfig(KeyboardJointTeleopConfig):
